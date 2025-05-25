@@ -361,11 +361,12 @@ void zmk_mouse_ps2_activity_abort_cmd(char *reason) {
     const struct zmk_mouse_ps2_config *config = &zmk_mouse_ps2_config;
     const struct device *ps2_device = config->ps2_device;
 
-    LOG_ERR("PS/2 Mouse cmd buffer is out of aligment. Requesting resend: %s", reason);
+    // LOG_ERR("PS/2 Mouse cmd buffer is out of aligment. Requesting resend: %s", reason);
+    // ps2_write(ps2_device, MOUSE_PS2_CMD_RESEND[0]);
+    LOG_ERR(
+        "PS/2 Mouse cmd buffer is out of alignment. igoring..."); // resend somehow make it worse
 
     data->packet_idx = 0;
-    ps2_write(ps2_device, MOUSE_PS2_CMD_RESEND[0]);
-
     zmk_mouse_ps2_activity_reset_packet_buffer();
 }
 

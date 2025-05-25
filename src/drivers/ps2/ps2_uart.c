@@ -582,7 +582,7 @@ void ps2_uart_read_process_received_byte(uint8_t byte) {
 
     int err;
 
-    LOG_DBG("UART Received: 0x%x", byte);
+    // LOG_DBG("UART Received: 0x%x", byte);
 
     err = ps2_uart_read_err_check(config->uart_dev);
     if (err != 0) {
@@ -596,7 +596,7 @@ void ps2_uart_read_process_received_byte(uint8_t byte) {
         }
     }
 
-    LOG_DBG("Received byte: 0x%x", byte);
+    // LOG_DBG("Received byte: 0x%x", byte);
 
     // If write_byte_await_response() is waiting, we notify
     // the blocked write process of whether it was a success or not.
