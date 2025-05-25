@@ -181,6 +181,21 @@ static void filter_with_input_config(const struct input_listener_ps2_config *cfg
     }
 
     evt->value = (int16_t)((evt->value * cfg->scale_multiplier) / cfg->scale_divisor);
+
+    // LOG_INF("layer_state: %d, code: %s, value: %d", zmk_keymap_layer_state(),
+    //         get_input_code_name(evt), evt->value);
+    if (zmk_keymap_layer_state() != 0) {
+        switch (evt->code) {
+        case INPUT_REL_X:
+            evt->code = INPUT_REL_HWHEEL;
+            break;
+        case INPUT_REL_Y:
+            evt->code = INPUT_REL_WHEEL;
+            evt->value = -(evt->value);
+            break;
+        }
+        evt->value = (int16_t)((evt->value * 1) / 2);
+    }
 }
 
 static void clear_xy_data(struct input_listener_ps2_xy_data *data) {
