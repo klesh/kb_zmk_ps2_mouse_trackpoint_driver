@@ -69,6 +69,7 @@ struct input_listener_ps2_config {
     int layer_toggle;
     int layer_toggle_delay_ms;
     int layer_toggle_timeout_ms;
+    int scroll_layer;
 };
 
 void zmk_input_listener_ps2_layer_toggle_input_rel_received(
@@ -184,7 +185,7 @@ static void filter_with_input_config(const struct input_listener_ps2_config *cfg
 
     // LOG_INF("layer_state: %d, code: %s, value: %d", zmk_keymap_layer_state(),
     //         get_input_code_name(evt), evt->value);
-    if (zmk_keymap_layer_state() != 0) {
+    if (cfg->scroll_layer >= 0 && zmk_keymap_highest_layer_active() == cfg->scroll_layer) {
         switch (evt->code) {
         case INPUT_REL_X:
             evt->code = INPUT_REL_HWHEEL;
@@ -351,6 +352,7 @@ static int zmk_input_listener_ps2_layer_toggle_init(const struct input_listener_
                             .layer_toggle = DT_INST_PROP(n, layer_toggle),                         \
                             .layer_toggle_delay_ms = DT_INST_PROP(n, layer_toggle_delay_ms),       \
                             .layer_toggle_timeout_ms = DT_INST_PROP(n, layer_toggle_timeout_ms),   \
+                            .scroll_layer = DT_INST_PROP(n, scroll_layer),                         \
                         };                                                                         \
                     static struct input_listener_ps2_data data_##n =                               \
                         {                                                                          \

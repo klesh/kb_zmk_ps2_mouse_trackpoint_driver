@@ -34,3 +34,8 @@ properties:
     default: 250
     required: false
     description: How many miliseconds of mouse inactivity are required before the layer is toggled off again.
+  scroll-layer:
+    type: int
+    default: -1
+    required: false
+    description: The layer index that activates scroll mode when it is the highest active layer.
