@@ -145,6 +145,27 @@ struct ps2_uart_data_queue_item {
     uint8_t byte;
 };
 
+#if IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS)
+
+// The bytes of one PS/2 packet arrive about 0.8 ms apart and packets at
+// least 5 ms apart. A longer gap than this between two bytes means a new
+// packet starts.
+#define PS2_UART_PACKET_GAP_US 2000
+
+#define PS2_UART_CB_QUEUE_SIZE 32
+
+// A received byte on its way from the UART interrupt to the PS/2 callback
+struct ps2_uart_cb_queue_item {
+    uint8_t byte;
+    bool err;
+    uint32_t time_us;
+};
+
+// Implemented by the PS/2 mouse driver
+void zmk_mouse_ps2_activity_reset_packet_buffer();
+
+#endif /* IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS) */
+
 struct ps2_uart_config {
     const struct device *uart_dev;
     struct gpio_dt_spec scl_gpio;
@@ -170,6 +191,15 @@ struct ps2_uart_data {
 #endif /* IS_ENABLED(CONFIG_PS2_UART_ENABLE_PS2_RESEND_CALLBACK) */
 
     bool callback_enabled;
+
+#if IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS)
+    // Queue from the UART interrupt to the PS/2 callback, so that no byte is
+    // lost when several arrive before the callback work runs
+    struct k_msgq cb_queue;
+    char cb_queue_buffer[PS2_UART_CB_QUEUE_SIZE * sizeof(struct ps2_uart_cb_queue_item)];
+    uint32_t cb_prev_time_us;
+    bool cb_dropping_packet;
+#endif /* IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS) */
 
     // Queue for ps2_read()
     struct k_msgq data_queue;
@@ -623,7 +653,21 @@ void ps2_uart_read_process_received_byte(uint8_t byte) {
         // Call callback from a worker to make sure the callback
         // doesn't block the interrupt.
         // Will call ps2_uart_read_callback_work_handler
+#if IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS)
+        // Only parity and overrun errors mean the byte is wrong or bytes were
+        // lost. A framing error alone (late stop bit) is frequent with the
+        // 14400 baud approximation and leaves the data bits intact.
+        struct ps2_uart_cb_queue_item item = {
+            .byte = byte,
+            .err = (err == UART_ERROR_PARITY || err == UART_ERROR_OVERRUN),
+            .time_us = k_ticks_to_us_floor32(k_uptime_ticks()),
+        };
+        if (k_msgq_put(&data->cb_queue, &item, K_NO_WAIT) != 0) {
+            LOG_WRN("Callback queue full. Dropping byte 0x%x.", byte);
+        }
+#else
         data->callback_byte = byte;
+#endif /* IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS) */
         k_work_submit_to_queue(&ps2_uart_work_queue_cb, &data->callback_work);
     } else {
         ps2_uart_data_queue_add(byte);
@@ -650,8 +694,34 @@ const char *ps2_uart_read_get_error_str(int err) {
 void ps2_uart_read_callback_work_handler(struct k_work *work) {
     struct ps2_uart_data *data = &ps2_uart_data;
 
+#if IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS)
+    struct ps2_uart_cb_queue_item item;
+
+    while (k_msgq_get(&data->cb_queue, &item, K_NO_WAIT) == 0) {
+        // A gap between two bytes means a new packet starts. Get back in
+        // step with the device, whatever happened to the previous packet.
+        if (item.time_us - data->cb_prev_time_us > PS2_UART_PACKET_GAP_US) {
+            zmk_mouse_ps2_activity_reset_packet_buffer();
+            data->cb_dropping_packet = false;
+        }
+        data->cb_prev_time_us = item.time_us;
+
+        // A parity or overrun error makes the whole packet unreliable. Drop
+        // the bytes buffered so far and the rest of the packet.
+        if (item.err) {
+            LOG_WRN("Dropping packet with mistransmitted byte 0x%x", item.byte);
+            zmk_mouse_ps2_activity_reset_packet_buffer();
+            data->cb_dropping_packet = true;
+        }
+
+        if (!data->cb_dropping_packet && data->callback_enabled) {
+            data->callback_isr(data->dev, item.byte);
+        }
+    }
+#else
     data->callback_isr(data->dev, data->callback_byte);
     data->callback_byte = 0x0;
+#endif /* IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS) */
 }
 
 /*
@@ -1205,6 +1275,10 @@ static int ps2_uart_enable_callback(const struct device *dev) {
 
     ps2_uart_data_queue_empty();
 
+#if IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS)
+    k_msgq_purge(&data->cb_queue);
+#endif /* IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS) */
+
     return 0;
 }
 
@@ -1246,6 +1320,11 @@ static int ps2_uart_init(const struct device *dev) {
     // Init data queue for synchronous read operations
     k_msgq_init(&data->data_queue, data->data_queue_buffer, sizeof(struct ps2_uart_data_queue_item),
                 PS2_UART_DATA_QUEUE_SIZE);
+
+#if IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS)
+    k_msgq_init(&data->cb_queue, data->cb_queue_buffer, sizeof(struct ps2_uart_cb_queue_item),
+                PS2_UART_CB_QUEUE_SIZE);
+#endif /* IS_ENABLED(CONFIG_PS2_UART_DROP_ERROR_PACKETS) */
 
     // Custom queue for background PS/2 processing work at high priority
     k_work_queue_start(&ps2_uart_work_queue, ps2_uart_work_queue_stack_area,

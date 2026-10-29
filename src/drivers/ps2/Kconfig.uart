@@ -23,6 +23,11 @@ config PS2_UART_ENABLE_PS2_RESEND_CALLBACK
 	default n
 	select ZMK_INPUT_MOUSE_PS2_ENABLE_PS2_RESEND_CALLBACK
 
+config PS2_UART_DROP_ERROR_PACKETS
+	bool "Drop every mouse packet that contains a byte with a parity or overrun error, and get back in step with the device at the next packet. Received bytes are queued, so none is lost when several arrive before the mouse driver handles them."
+	default n
+	depends on ZMK_INPUT_MOUSE_PS2
+
 # PM_DEVICE is needed, because we use GPIO bitbanging for writing. And to
 # release the data PIN that is used by the UART device, we use pinctrl to
 # switch to the sleep state. But the sleep state is only included if PM_DEVICE

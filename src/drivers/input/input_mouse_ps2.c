@@ -448,7 +448,10 @@ void zmk_mouse_ps2_activity_process_cmd(zmk_mouse_ps2_packet_mode packet_mode, u
 #endif
 
     zmk_mouse_ps2_activity_move_mouse(packet.mov_x, packet.mov_y);
+
+#if !IS_ENABLED(CONFIG_ZMK_INPUT_MOUSE_PS2_IGNORE_BUTTONS)
     zmk_mouse_ps2_activity_click_buttons(packet.button_l, packet.button_m, packet.button_r);
+#endif
 
     data->prev_packet = packet;
 }

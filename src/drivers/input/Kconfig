@@ -24,4 +24,8 @@ config ZMK_INPUT_MOUSE_PS2_ENABLE_ERROR_MITIGATION
     bool "Tries to mitigate transmission errors. Only useful when using a PS2 driver that is prone to miscommunication like the GPIO bitbanging driver."
 	default n
 
+config ZMK_INPUT_MOUSE_PS2_IGNORE_BUTTONS
+    bool "Never report the PS/2 device's buttons and only report its movement. Use it when clicks come from the keymap instead, so that a mistransmitted packet, or a trackpoint's press-to-select, can never click."
+	default n
+
 endif # ZMK_INPUT_MOUSE_PS2
