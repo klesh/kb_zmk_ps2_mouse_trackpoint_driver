@@ -70,6 +70,8 @@ struct input_listener_ps2_config {
     int layer_toggle_delay_ms;
     int layer_toggle_timeout_ms;
     int scroll_layer;
+    uint16_t scroll_scale_multiplier;
+    uint16_t scroll_scale_divisor;
 };
 
 void zmk_input_listener_ps2_layer_toggle_input_rel_received(
@@ -195,7 +197,8 @@ static void filter_with_input_config(const struct input_listener_ps2_config *cfg
             evt->value = -(evt->value);
             break;
         }
-        evt->value = (int16_t)((evt->value * 1) / 2);
+        evt->value =
+            (int16_t)((evt->value * cfg->scroll_scale_multiplier) / cfg->scroll_scale_divisor);
     }
 }
 
@@ -251,7 +254,7 @@ static void input_handler_ps2(const struct input_listener_ps2_config *config,
             }
         }
 
-        zmk_endpoints_send_mouse_report();
+        zmk_endpoint_send_mouse_report();
         zmk_hid_mouse_scroll_set(0, 0);
         zmk_hid_mouse_movement_set(0, 0);
 
@@ -300,7 +303,7 @@ void zmk_input_listener_ps2_layer_toggle_activate_layer(struct k_work *item) {
 
 #else
 
-        zmk_keymap_layer_activate(config->layer_toggle);
+        zmk_keymap_layer_activate(config->layer_toggle, false);
 
 #endif /* IS_ENABLED(CONFIG_ZMK_INPUT_MOUSE_PS2_ENABLE_UROB_COMPAT) */
 
@@ -321,7 +324,7 @@ void zmk_input_listener_ps2_layer_toggle_deactivate_layer(struct k_work *item) {
     LOG_INF("Deactivating layer %d due to mouse activity...", config->layer_toggle);
 
     if (zmk_keymap_layer_active(config->layer_toggle)) {
-        zmk_keymap_layer_deactivate(config->layer_toggle);
+        zmk_keymap_layer_deactivate(config->layer_toggle, false);
     }
 
     data->layer_toggle_layer_enabled = false;
@@ -353,6 +356,8 @@ static int zmk_input_listener_ps2_layer_toggle_init(const struct input_listener_
                             .layer_toggle_delay_ms = DT_INST_PROP(n, layer_toggle_delay_ms),       \
                             .layer_toggle_timeout_ms = DT_INST_PROP(n, layer_toggle_timeout_ms),   \
                             .scroll_layer = DT_INST_PROP(n, scroll_layer),                         \
+                            .scroll_scale_multiplier = DT_INST_PROP(n, scroll_scale_multiplier),  \
+                            .scroll_scale_divisor = DT_INST_PROP(n, scroll_scale_divisor),        \
                         };                                                                         \
                     static struct input_listener_ps2_data data_##n =                               \
                         {                                                                          \
@@ -360,10 +365,11 @@ static int zmk_input_listener_ps2_layer_toggle_init(const struct input_listener_
                             .layer_toggle_layer_enabled = false,                                   \
                             .layer_toggle_last_mouse_package_time = 0,                             \
                         };                                                                         \
-                    void input_handler_ps2_##n(struct input_event *evt) {                          \
+                    void input_handler_ps2_##n(struct input_event *evt, void *user_data) {         \
+                        (void)user_data;                                                           \
                         input_handler_ps2(&config_##n, &data_##n, evt);                            \
                     } INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_INST_PHANDLE(n, device)),             \
-                                            input_handler_ps2_##n);                                \
+                                            input_handler_ps2_##n, NULL);                       \
                                                                                                    \
                     static int zmk_input_listener_ps2_init_##n(const struct device *dev) {         \
                         struct input_listener_ps2_data *data = dev->data;                          \

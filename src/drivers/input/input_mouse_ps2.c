@@ -146,6 +146,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define MOUSE_PS2_THREAD_STACK_SIZE 2048
 #define MOUSE_PS2_THREAD_PRIORITY 10
 
+static K_THREAD_STACK_DEFINE(zmk_mouse_ps2_thread_stack, MOUSE_PS2_THREAD_STACK_SIZE);
+
 /*
  * Global Variables
  */
@@ -191,7 +193,6 @@ struct zmk_mouse_ps2_data {
     const struct device *dev;
     struct gpio_dt_spec rst_gpio; /* GPIO used for Power-On-Reset line */
 
-    K_THREAD_STACK_MEMBER(thread_stack, MOUSE_PS2_THREAD_STACK_SIZE);
     struct k_thread thread;
 
     zmk_mouse_ps2_packet_mode packet_mode;
@@ -1611,9 +1612,10 @@ static int zmk_mouse_ps2_init(const struct device *dev) {
     LOG_DBG("Inside zmk_mouse_ps2_init");
 
     LOG_DBG("Creating mouse_ps2 init thread.");
-    k_thread_create(&zmk_mouse_ps2_data.thread, zmk_mouse_ps2_data.thread_stack,
-                    MOUSE_PS2_THREAD_STACK_SIZE, (k_thread_entry_t)zmk_mouse_ps2_init_thread,
-                    (struct device *)dev, 0, NULL, K_PRIO_COOP(MOUSE_PS2_THREAD_PRIORITY), 0,
+    k_thread_create(&zmk_mouse_ps2_data.thread, zmk_mouse_ps2_thread_stack,
+                    K_THREAD_STACK_SIZEOF(zmk_mouse_ps2_thread_stack),
+                    (k_thread_entry_t)zmk_mouse_ps2_init_thread, (struct device *)dev, 0, NULL,
+                    K_PRIO_COOP(MOUSE_PS2_THREAD_PRIORITY), 0,
                     K_MSEC(ZMK_MOUSE_PS2_INIT_THREAD_DELAY_MS));
 
     return 0;

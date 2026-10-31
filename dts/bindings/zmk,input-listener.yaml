@@ -39,3 +39,13 @@ properties:
     default: -1
     required: false
     description: The layer index that activates scroll mode when it is the highest active layer.
+  scroll-scale-multiplier:
+    type: int
+    default: 1
+    required: false
+    description: Multiplier applied to scroll values while scroll mode is active.
+  scroll-scale-divisor:
+    type: int
+    default: 2
+    required: false
+    description: Divisor applied to scroll values while scroll mode is active.
